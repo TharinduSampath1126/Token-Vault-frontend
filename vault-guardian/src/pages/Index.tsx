@@ -1,104 +1,32 @@
-import { useState } from "react";
 import { Vault } from "lucide-react";
+import { useVault } from "@/context/vaultContext";
 import WalletConnect from "@/components/vault/WalletConnect";
 import VaultInfo from "@/components/vault/VaultInfo";
 import DepositForm from "@/components/vault/DepositForm";
 import WithdrawForm from "@/components/vault/WithdrawForm";
-import TransactionStatus, { TransactionState } from "@/components/vault/TransactionStatus";
-import { connect } from "http2";
-import {ethers} from "ethers";
+import TransactionStatus from "@/components/vault/TransactionStatus";
 
 const Index = () => {
-  // Wallet state
-  const [isConnected, setIsConnected] = useState(false);
-  const [address, setAddress] = useState<string | null>(null);
-  const [isMetaMaskInstalled] = useState(typeof window !== "undefined" && typeof (window as any).ethereum !== "undefined");
-
-  // Vault state (mock data for UI demo)
-  const [userBalance] = useState("1.5");
-  const [contractBalance] = useState("25.75");
-  const contractOwnerAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f4A321";
-  const [network] = useState("Sepolia");
-  const [isOwner] = useState(true);
-
-  // Transaction state
-  const [isLoading, setIsLoading] = useState(false);
-  const [txStatus, setTxStatus] = useState<TransactionState>("idle");
-  const [txHash, setTxHash] = useState<string | undefined>();
-  const [errorMessage, setErrorMessage] = useState<string | undefined>();
-
-  const [connectedAddress, setConnectedAddress] = useState<string | null>(null);
-
-  const connectWallet = async () => {
-      if(!(window as any).ethereum) {
-        alert("MetaMask is not installed. Please install it to use this DApp.");
-        return;
-      }
-
-      await (window as any).ethereum.request({
-          method : "eth_requestAccounts"
-      })
-
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const signer = await provider.getSigner();
-      const walletAddress = await signer.getAddress();
-
-      console.log("Connected address:", walletAddress);
-      
-      setAddress(walletAddress);
-      setIsConnected(true);
-  };
-
-  const handleConnect = async () => {
-    await connectWallet();
-  };
-
-  const handleDisconnect = () => {
-    setIsConnected(false);
-    setAddress(null);
-  };
-
-  const simulateTransaction = async (action: string) => {
-    setIsLoading(true);
-    setTxStatus("pending");
-    setTxHash(undefined);
-    setErrorMessage(undefined);
-
-    // Simulate transaction delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Simulate success (90% chance) or error (10% chance)
-    if (Math.random() > 0.1) {
-      setTxStatus("success");
-      setTxHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
-    } else {
-      setTxStatus("error");
-      setErrorMessage(`${action} failed: User rejected transaction`);
-    }
-
-    setIsLoading(false);
-  };
-
-  const handleDeposit = (amount: string) => {
-    console.log("Depositing:", amount, "ETH");
-    simulateTransaction("Deposit");
-  };
-
-  const handleWithdraw = (amount: string) => {
-    console.log("Withdrawing:", amount, "ETH");
-    simulateTransaction("Withdraw");
-  };
-
-  const handleWithdrawAll = () => {
-    console.log("Withdrawing all funds");
-    simulateTransaction("Withdraw All");
-  };
-
-  const dismissTransaction = () => {
-    setTxStatus("idle");
-    setTxHash(undefined);
-    setErrorMessage(undefined);
-  };
+  const {
+    isConnected,
+    address,
+    isMetaMaskInstalled,
+    userBalance,
+    contractBalance,
+    contractOwnerAddress,
+    network,
+    isOwner,
+    isLoading,
+    txStatus,
+    txHash,
+    errorMessage,
+    connectWallet,
+    handleDisconnect,
+    handleDeposit,
+    handleWithdraw,
+    handleWithdrawAll,
+    dismissTransaction,
+  } = useVault();
 
   return (
     <div className="min-h-screen py-12 px-4">
@@ -121,7 +49,7 @@ const Index = () => {
             isConnected={isConnected}
             address={address}
             isMetaMaskInstalled={isMetaMaskInstalled}
-            onConnect={handleConnect}
+            onConnect={connectWallet}
             onDisconnect={handleDisconnect}
           />
 

@@ -61,7 +61,7 @@ const WalletConnect = ({
           </div>
         </div>
         {isConnected ? (
-          <Button variant="outline" onClick={onDisconnect} className="border-white/30 text-white hover:bg-white/20">
+          <Button variant="outline" onClick={onDisconnect} className="bg-white/20 hover:bg-white/30 text-white border border-white/30">
             Disconnect
           </Button>
         ) : (
