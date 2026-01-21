@@ -7,26 +7,28 @@ import WithdrawForm from "@/components/vault/WithdrawForm";
 import TransactionStatus from "@/components/vault/TransactionStatus";
 
 const Index = () => {
-  const {
-    isConnected,
-    address,
-    isMetaMaskInstalled,
-    userBalance,
-    contractBalance,
-    contractOwnerAddress,
-    network,
-    isOwner,
-    isLoading,
-    txStatus,
-    txHash,
-    errorMessage,
-    connectWallet,
-    handleDisconnect,
-    handleDeposit,
-    handleWithdraw,
-    handleWithdrawAll,
-    dismissTransaction,
-  } = useVault();
+          const {
+            isConnected,
+            address,
+            isMetaMaskInstalled,
+            userBalance,
+            contractBalance,
+            userVaultBalance,
+            contractOwnerAddress,
+            network,
+            isOwner,
+            contractAddress,
+            isLoading,
+            txStatus,
+            txHash,
+            errorMessage,
+            connectWallet,
+            handleDisconnect,
+            handleDeposit,
+            handleWithdraw,
+            handleWithdrawAll,
+            dismissTransaction,
+          } = useVault();
 
   return (
     <div className="min-h-screen py-12 px-4">
@@ -68,10 +70,13 @@ const Index = () => {
               <VaultInfo
                 userBalance={userBalance}
                 contractBalance={contractBalance}
+                userVaultBalance={userVaultBalance}
                 contractOwnerAddress={contractOwnerAddress}
                 connectedAddress={address}
                 network={network}
                 isConnected={isConnected}
+                contractAddress={contractAddress}
+                isOwner={isOwner}
               />
             </div>
 

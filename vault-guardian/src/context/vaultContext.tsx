@@ -1,6 +1,10 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { ethers } from "ethers";
 import { TransactionState } from "@/components/vault/TransactionStatus";
+import TokenVaultABI from "@/contracts/TokenVault.json";
+
+// Contract address - Update this with your deployed contract address
+const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // Local Hardhat network default
 
 interface VaultContextType {
   // Wallet state
@@ -11,9 +15,11 @@ interface VaultContextType {
   
   // Vault state
   contractBalance: string;
+  userVaultBalance: string;
   contractOwnerAddress: string;
   network: string;
   isOwner: boolean;
+  contractAddress: string;
   
   // Transaction state
   isLoading: boolean;
@@ -54,10 +60,77 @@ export const VaultProvider = ({ children }: VaultProviderProps) => {
 
   // Vault state
   const [userBalance, setUserBalance] = useState("0");
-  const [contractBalance] = useState("25.75");
-  const contractOwnerAddress = "0x742d35Cc6634C0532925a3b844Bc9e7595f4A321";
-  const [network] = useState("Sepolia");
-  const [isOwner] = useState(true);
+  const [contractBalance, setContractBalance] = useState("0");
+  const [userVaultBalance, setUserVaultBalance] = useState("0");
+  const [contractOwnerAddress, setContractOwnerAddress] = useState("");
+  const [network, setNetwork] = useState("Unknown");
+  const [isOwner, setIsOwner] = useState(false);
+
+  // Fetch contract data
+  const fetchContractData = async () => {
+    try {
+      if (!(window as any).ethereum) return;
+      
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, TokenVaultABI.abi, provider);
+      
+      // Get contract balance (total ETH in contract)
+      const balance = await provider.getBalance(CONTRACT_ADDRESS);
+      const formattedBalance = ethers.formatEther(balance);
+      setContractBalance(formattedBalance);
+      
+      // Get contract owner
+      const owner = await contract.owner();
+      setContractOwnerAddress(owner);
+      
+      // Get network info
+      const networkInfo = await provider.getNetwork();
+      let networkName = 'Unknown';
+      
+      if (networkInfo.chainId === 1337n || networkInfo.chainId === 31337n) {
+        networkName = 'Localhost';
+      } else if (networkInfo.chainId === 11155111n) {
+        networkName = 'Sepolia';
+      } else if (networkInfo.chainId === 1n) {
+        networkName = 'Mainnet';
+      } else {
+        networkName = `Chain ${networkInfo.chainId}`;
+      }
+      
+      setNetwork(networkName);
+      
+      // If user is connected, get their vault balance and check if they're owner
+      if (address) {
+        const userVaultBal = await contract.balances(address);
+        const formattedUserVaultBalance = ethers.formatEther(userVaultBal);
+        setUserVaultBalance(formattedUserVaultBalance);
+        
+        // Check if connected user is the owner
+        setIsOwner(address.toLowerCase() === owner.toLowerCase());
+      }
+      
+      console.log("Contract data fetched:", {
+        contractBalance: formattedBalance,
+        owner,
+        network: networkInfo.name,
+        userVaultBalance: address ? ethers.formatEther(await contract.balances(address)) : "0"
+      });
+    } catch (error) {
+      console.error("Error fetching contract data:", error);
+    }
+  };
+
+  // Fetch contract data on mount and when connected
+  useEffect(() => {
+    fetchContractData();
+    
+    // Set up an interval to refresh data every 10 seconds
+    const interval = setInterval(() => {
+      fetchContractData();
+    }, 10000);
+    
+    return () => clearInterval(interval);
+  }, [isConnected, address]);
 
   // Transaction state
   const [isLoading, setIsLoading] = useState(false);
@@ -109,40 +182,135 @@ export const VaultProvider = ({ children }: VaultProviderProps) => {
     setAddress(null);
   };
 
-  const simulateTransaction = async (action: string) => {
+  const handleDeposit = async (amount: string) => {
+    if (!isConnected || !address) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
     setIsLoading(true);
     setTxStatus("pending");
     setTxHash(undefined);
     setErrorMessage(undefined);
 
-    // Simulate transaction delay
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, TokenVaultABI.abi, signer);
 
-    // Simulate success (90% chance) or error (10% chance)
-    if (Math.random() > 0.1) {
+      console.log("Depositing:", amount, "ETH");
+      
+      const tx = await contract.deposit({
+        value: ethers.parseEther(amount)
+      });
+      
+      setTxHash(tx.hash);
+      console.log("Transaction sent:", tx.hash);
+      
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+      
       setTxStatus("success");
-      setTxHash("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef");
-    } else {
+      
+      // Refresh contract data after successful transaction
+      setTimeout(() => {
+        fetchContractData();
+        connectWallet(); // Refresh user balance
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error("Deposit failed:", error);
       setTxStatus("error");
-      setErrorMessage(`${action} failed: User rejected transaction`);
+      setErrorMessage(error.reason || error.message || "Deposit failed");
     }
 
     setIsLoading(false);
   };
 
-  const handleDeposit = (amount: string) => {
-    console.log("Depositing:", amount, "ETH");
-    simulateTransaction("Deposit");
+  const handleWithdraw = async (amount: string) => {
+    if (!isConnected || !address) {
+      alert("Please connect your wallet first");
+      return;
+    }
+
+    setIsLoading(true);
+    setTxStatus("pending");
+    setTxHash(undefined);
+    setErrorMessage(undefined);
+
+    try {
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, TokenVaultABI.abi, signer);
+
+      console.log("Withdrawing:", amount, "ETH");
+      
+      const tx = await contract.withdraw(ethers.parseEther(amount));
+      
+      setTxHash(tx.hash);
+      console.log("Transaction sent:", tx.hash);
+      
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+      
+      setTxStatus("success");
+      
+      // Refresh contract data after successful transaction
+      setTimeout(() => {
+        fetchContractData();
+        connectWallet(); // Refresh user balance
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error("Withdraw failed:", error);
+      setTxStatus("error");
+      setErrorMessage(error.reason || error.message || "Withdraw failed");
+    }
+
+    setIsLoading(false);
   };
 
-  const handleWithdraw = (amount: string) => {
-    console.log("Withdrawing:", amount, "ETH");
-    simulateTransaction("Withdraw");
-  };
+  const handleWithdrawAll = async () => {
+    if (!isConnected || !address) {
+      alert("Please connect your wallet first");
+      return;
+    }
 
-  const handleWithdrawAll = () => {
-    console.log("Withdrawing all funds");
-    simulateTransaction("Withdraw All");
+    setIsLoading(true);
+    setTxStatus("pending");
+    setTxHash(undefined);
+    setErrorMessage(undefined);
+
+    try {
+      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const signer = await provider.getSigner();
+      const contract = new ethers.Contract(CONTRACT_ADDRESS, TokenVaultABI.abi, signer);
+
+      console.log("Withdrawing all funds");
+      
+      const tx = await contract.withdrawAll();
+      
+      setTxHash(tx.hash);
+      console.log("Transaction sent:", tx.hash);
+      
+      const receipt = await tx.wait();
+      console.log("Transaction confirmed:", receipt);
+      
+      setTxStatus("success");
+      
+      // Refresh contract data after successful transaction
+      setTimeout(() => {
+        fetchContractData();
+        connectWallet(); // Refresh user balance
+      }, 1000);
+      
+    } catch (error: any) {
+      console.error("Withdraw all failed:", error);
+      setTxStatus("error");
+      setErrorMessage(error.reason || error.message || "Withdraw all failed");
+    }
+
+    setIsLoading(false);
   };
 
   const dismissTransaction = () => {
@@ -160,9 +328,11 @@ export const VaultProvider = ({ children }: VaultProviderProps) => {
     
     // Vault state
     contractBalance,
+    userVaultBalance,
     contractOwnerAddress,
     network,
     isOwner,
+    contractAddress: CONTRACT_ADDRESS,
     
     // Transaction state
     isLoading,
